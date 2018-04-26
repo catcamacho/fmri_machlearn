@@ -4,23 +4,24 @@
 # # Preprocessing for machine learning
 # This notebook is designed to preprocess  neuroimaging and behavioral data for machine learning analyses. This includes mean-centering and normalizing vector data (i.e. questionnaire scores, demographics) and extracting a beta series from the fMRI data. The beta series is a result of deconvolving the time series for each trial which allows us to use the beta maps as entries for classification rather than a BOLD timeseries (see Mumford 2012 for a more thorough explanation of this; these steps are also outlined below).
 
-# In[1]:
+# In[ ]:
 
 
 from pandas import DataFrame, Series, read_csv
 
 # Study specific variables
 study_home = '/home/camachocm2/Analysis/KidVid_MVPA'
-standard_mask = '/home/camachocm2/Analysis/Templates/MNI152_T1_2mm_brain_mask.nii.gz'
+sub_data_file = study_home + '/doc/subjectinfo.csv'
 
-subject_info = read_csv(study_home + '/doc/subjectinfo.csv')
-subjects_list = subject_info['subjID'].tolist()
-version = subject_info['version'].tolist()
-
+subject_info = read_csv(sub_data_file)
+#subjects_list = subject_info['subjID'].tolist()
+#version = subject_info['version'].tolist()
+subjects_list = ['A1017']
+version = ['version2']
 
 # ### fMRI data preprocessing
 
-# In[2]:
+# In[ ]:
 
 
 from nipype.pipeline.engine import Workflow, Node, MapNode
@@ -30,7 +31,8 @@ from nipype.interfaces.nipy.model import FitGLM, EstimateContrast
 from nipype.interfaces.utility import IdentityInterface, Function
 from nipype.interfaces.io import SelectFiles, DataSink, DataGrabber
 from nipype.interfaces.fsl.model import GLM, Level1Design, FEATModel
-from nipype.interfaces.fsl.maths import ApplyMask
+from nipype.interfaces.nipy.preprocess import Trim
+
 
 preproc_fmri = study_home + '/processed_data'
 output_dir = study_home + '/analysis/preproc'
@@ -44,7 +46,7 @@ from nipype.interfaces.fsl import FSLCommand
 FSLCommand.set_default_output_type('NIFTI_GZ')
 
 
-# In[3]:
+# In[ ]:
 
 
 # Data handling nodes
@@ -68,7 +70,7 @@ datasink = Node(DataSink(substitutions=substitutions,
                 name='datasink')
 
 
-# In[4]:
+# In[ ]:
 
 
 # Extract timing for Beta Series Method- mark trials as high and low motion
@@ -135,7 +137,7 @@ def beta_contrasts(timing_bunch):
     return(contrasts_list)
 
 
-# In[5]:
+# In[ ]:
 
 
 # Get framewise displacement to use as a regressor in the GLM
@@ -176,6 +178,11 @@ generate_model = Node(FEATModel(),
 extract_pes = Node(GLM(out_file = 'betas.nii.gz'), 
                    name='extract_pes')
 
+# Trim the nuissance regressor from the betas (the motion regressor)
+trim_pes = Node(Trim(end_index = 24, out_file='betas.nii.gz'), 
+                name='trim_pes')
+
+
 # In[ ]:
 
 
@@ -195,8 +202,9 @@ preprocflow.connect([(infosource, selectfiles,[('subjid','subjid')]),
                      (generate_model,extract_pes, [('design_file','design')]),
                      (generate_model,extract_pes, [('con_file','contrasts')]),
                      (selectfiles,extract_pes, [('proc_func','in_file')]),
+                     (extract_pes, trim_pes, [('out_file','in_file')]),
                      
-                     (extract_pes,datasink,[('out_file','betas')]),
+                     (trim_pes,datasink,[('out_file','betas')]),
                      (get_fd, datasink, [('out_metric_values','fd_motion')]),
                      (get_fd, datasink, [('out_metric_plot','fd_motion_plots')]),
                      (generate_model,datasink,[('design_image','design_image')])
@@ -204,4 +212,3 @@ preprocflow.connect([(infosource, selectfiles,[('subjid','subjid')]),
 preprocflow.base_dir = workflow_dir
 preprocflow.write_graph(graph2use='flat')
 preprocflow.run('MultiProc', plugin_args={'n_procs': 4,'memory_gb':10})
-
