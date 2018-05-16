@@ -71,7 +71,7 @@ merge.inputs.merged_file = bold_feature_data
 
 
 # determine which analysis to run
-analysis = 'neutral'
+analysis = 'positive'
 
 if analysis == 'all_conditions':
     mask = conditions['labels'].isin(['negative','positive','neutral'])
@@ -135,7 +135,7 @@ print("this is for analysis: " + analysis)
 
 print("Classification accuracy: %.4f / Chance level: %f" % 
       (classification_accuracy, 1. / len(labels.unique())))
-results_file.write("Classification accuracy: %.4f / Chance level: %f" % (classification_accuracy, 1. / len(labels.unique())))
+results_file.write("Classification accuracy: %.4f / Chance level: %f \n" % (classification_accuracy, 1. / len(labels.unique())))
 
 # ## Perform permutation testing to get a p-value for the classifier
 
@@ -144,11 +144,13 @@ results_file.write("Classification accuracy: %.4f / Chance level: %f" % (classif
 
 from sklearn.model_selection import permutation_test_score
 import matplotlib.pyplot as plt
+from numpy import savetxt
 
 # Perform permutation testing to get a p-value
 score, permutation_scores, pvalue = permutation_test_score(svc, X, y_pred, scoring="accuracy", 
                                                            cv=cv, n_permutations=500, n_jobs=12)
 
+savetxt(output_dir + '/permutation_scores_' + analysis + '.txt', permutation_scores)
 print("Classification score %s (pvalue : %s)" % (score, pvalue))
 
 plt.hist(permutation_scores, 20, label='Permutation scores',
