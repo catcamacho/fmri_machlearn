@@ -96,14 +96,6 @@ if analysis == 'all_conditions':
     mask = conditions['labels'].isin(['negative','positive','neutral'])
     labels = conditions['labels']
     type_svm = 'binary'
-elif analysis == 'adults':
-    mask = conditions['ageGroup'].isin(['adult'])
-    labels = conditions['labels']
-    type_svm = 'binary'
-elif analysis == 'children':
-    mask = conditions['ageGroup'].isin(['child'])
-    labels = conditions['labels']
-    type_svm = 'binary'
 elif analysis == 'allConds_predAge':
     mask = conditions['labels'].isin(['negative','positive','neutral'])
     labels = conditions['ageGroup']
@@ -135,11 +127,6 @@ elif analysis == 'age_neu':
     mask = (conditions['ageGroup']=='child') & (conditions['labels']=='neutral')
     labels = conditions['age']
     type_svm = 'nonbinary'
-elif analysis == 'extern':
-    mask = (conditions['ageGroup']=='child')
-    labels = conditions['CBCL_extern']
-    type_svm = 'nonbinary'
-
 conditions[mask].describe()
 results_file = open(output_dir + '/results_' + analysis + '.txt','w')
 
@@ -203,7 +190,7 @@ from numpy import savetxt
 
 # Perform permutation testing to get a p-value
 score, permutation_scores, pvalue = permutation_test_score(svc, X, maskedlabels, scoring="accuracy", 
-                                                           cv=loso, n_permutations=500, n_jobs=10, 
+                                                           cv=loso, n_permutations=500, n_jobs=6, 
                                                            groups=conditions['subject'][mask])
 savetxt(output_dir + '/permutation_scores_' + analysis + '.txt', permutation_scores)
 
