@@ -89,6 +89,7 @@ def run_svm(analysis):
     elif analysis=='age':
         mask = (conditions['ageGroup']=='child')
         labels = conditions['age']
+        type_svm = 'nonbinary'
     elif analysis == 'age_neg':
         mask = (conditions['ageGroup']=='child') & (conditions['labels']=='negative')
         labels = conditions['age']
@@ -116,7 +117,7 @@ def run_svm(analysis):
     if type_svm == 'nonbinary':
         # Perform the support vector classification
         from nilearn.input_data import NiftiMasker
-        from sklearn.feature_selection import f_regression, SelectPercentile
+        from sklearn.feature_selection import f_regression, SelectPercentile, SelectFdr
         from sklearn.svm import SVR
         from sklearn.pipeline import Pipeline
 
@@ -125,7 +126,7 @@ def run_svm(analysis):
         masker = NiftiMasker(mask_img=gm_mask,standardize=True, 
                              memory='nilearn_cache', memory_level=1)
 
-        feature_selection = SelectPercentile(f_regression, percentile=5)
+        feature_selection = SelectFdr(f_regression, alpha=0.00000022) #0.05/228453 voxels
         fs_svr = Pipeline([('feat_select', feature_selection), ('svr', svr)])
 
         # Run the regression
@@ -145,9 +146,9 @@ def run_svm(analysis):
 
         print("prediction accuracy: %.4f / p-value: %f" % (r_val, p_val))
 
-        results_file.write("prediction accuracy r-value: %.4f / p-value: %f /n" % (r_val, p_val))
-        results_file.write('predicted: ' + str(y_pred) + '/n')
-        results_file.write('actual: ' + str(maskedlabels) + '/n')
+        results_file.write("prediction accuracy r-value: %.4f / p-value: %f \n" % (r_val, p_val))
+        results_file.write('predicted: ' + str(y_pred) + '\n')
+        results_file.write('actual: ' + str(maskedlabels) + '\n')
 
         # save SVR weights
         coef = svr.coef_
@@ -161,19 +162,13 @@ def run_svm(analysis):
         plt.xlabel('Actual')
         plt.ylabel('Predicted')
         plt.savefig(output_dir + '/scatter_pred_actual_' + analysis + '.png', transparent=True)
-        plt.show()
+        plt.close()
 
-
-    # ## Perform binary support vector classification
-
-    # In[ ]:
-
-
-    if type_svm == 'binary':
+    elif type_svm == 'binary':
         # Perform the support vector classification
         from nilearn.input_data import NiftiMasker
         from sklearn.svm import SVC
-        from sklearn.feature_selection import f_classif, SelectPercentile
+        from sklearn.feature_selection import f_classif, SelectPercentile, SelectFdr
         from sklearn.pipeline import Pipeline
 
         # Set up the support vector classifier
@@ -182,7 +177,7 @@ def run_svm(analysis):
                              memory='nilearn_cache', memory_level=1)
 
         # Select the top 5 percent features contributing to the model
-        feature_selection = SelectPercentile(f_classif, percentile=5)
+        feature_selection = SelectFdr(f_classif, alpha=0.00000022) #0.05/228453 voxels
         fs_svc = Pipeline([('feat_select', feature_selection), ('svc', svc)])
 
         # Run the classifier
@@ -195,7 +190,7 @@ def run_svm(analysis):
 
         loso = LeaveOneGroupOut()
         cv_scores = cross_validate(fs_svc, X, y=maskedlabels, n_jobs=10, return_train_score=True,
-                                   groups=conditions['subject'][mask], cv=loso)
+                                   groups=conditions['subject'][mask], cv=loso, scoring='accuracy')
         y_pred = cross_val_predict(fs_svc, X, y=maskedlabels, n_jobs=10,
                                    groups=conditions['subject'][mask], cv=loso)
 
@@ -244,31 +239,11 @@ def run_svm(analysis):
 
         plot_confusion_matrix(cnf_matrix, classes)
         plt.savefig(output_dir + '/confusion_matrix_' + analysis + '.png', transparent=True)
+        plt.close()
 
     results_file.close()    
 
 
-    # In[ ]:
-
-
-    #Shelve the results
-    import shelve
-
-    filename = output_dir + '/' + analysis + '_shelved.out'
-    my_shelf = shelve.open(filename,'n') # 'n' for new
-
-    for key in dir():
-        try:
-            my_shelf[key] = globals()[key]
-        except TypeError:
-            #
-            # __builtins__, my_shelf, and imported modules can not be shelved.
-            #
-            print('ERROR shelving: {0}'.format(key))
-    my_shelf.close()
-
-
-for analysis in ['all_conditions','allConds_predAge','negative', 
-                 'positive','neutral','age','age_neg','age_pos', 
-                 'age_neu']:
+for analysis in ['all_conditions','allConds_predAge','negative',
+                 'neutral','positive','age','age_neg','age_pos','age_neu']:
     run_svm(analysis)
