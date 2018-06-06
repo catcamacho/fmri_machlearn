@@ -126,7 +126,7 @@ def run_svm(analysis):
         masker = NiftiMasker(mask_img=gm_mask,standardize=True, 
                              memory='nilearn_cache', memory_level=1)
 
-        feature_selection = SelectFdr(f_regression, alpha=0.00000022) #0.05/228453 voxels
+        feature_selection = SelectFdr(f_regression, alpha=0.00000021) #0.05/228453 voxels = 0.00000021  #0.01 = 0.00000004
         fs_svr = Pipeline([('feat_select', feature_selection), ('svr', svr)])
 
         # Run the regression
@@ -177,7 +177,7 @@ def run_svm(analysis):
                              memory='nilearn_cache', memory_level=1)
 
         # Select the top 5 percent features contributing to the model
-        feature_selection = SelectFdr(f_classif, alpha=0.00000022) #0.05/228453 voxels
+        feature_selection = SelectFdr(f_classif, alpha=0.00000021) #0.05/228453 voxels = 0.00000021 #0.01 = 0.00000004
         fs_svc = Pipeline([('feat_select', feature_selection), ('svc', svc)])
 
         # Run the classifier
