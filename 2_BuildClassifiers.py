@@ -81,7 +81,7 @@ merge.inputs.merged_file = bold_feature_data
 
 
 # determine which analysis to run
-for analysis in ['all_conditions','allConds_predAge','negative','positive','neutral','age','age_neg','age_pos','age_neu']:
+for analysis in ['all_conditions','allConds_predAge','negative','positive','neutral']:
 
     if analysis == 'all_conditions':
         mask = conditions['labels'].isin(['negative','positive','neutral'])
@@ -103,129 +103,9 @@ for analysis in ['all_conditions','allConds_predAge','negative','positive','neut
         mask = conditions['labels'].isin(['neutral'])
         labels = conditions['ageGroup']
         type_svm = 'binary'
-    elif analysis=='age':
-        mask = conditions['ageGroup']=='child'
-        labels = conditions['age']
-        type_svm = 'nonbinary'
-    elif analysis == 'age_neg':
-        mask = (conditions['ageGroup']=='child') & (conditions['labels']=='negative')
-        labels = conditions['age']
-        type_svm = 'nonbinary'
-    elif analysis == 'age_pos':
-        mask = (conditions['ageGroup']=='child') & (conditions['labels']=='positive')
-        labels = conditions['age']
-        type_svm = 'nonbinary'
-    elif analysis == 'age_neu':
-        mask = (conditions['ageGroup']=='child') & (conditions['labels']=='neutral')
-        labels = conditions['age']
-        type_svm = 'nonbinary'
 
     results_file = open(output_dir + '/results_' + analysis + '_final.txt','w')
     conditions[mask].describe()
-
-
-    # ## Non-binary Classification
-    # 
-    # The below cells performs non-binary classification (support vector regression) based on age.
-
-    # In[24]:
-
-
-    if type_svm == 'nonbinary':
-        # Perform the support vector classification
-        from nilearn.input_data import NiftiMasker
-        from sklearn.feature_selection import f_regression, SelectPercentile
-        from sklearn.svm import SVR
-        from sklearn.pipeline import Pipeline
-
-        # Set up the regression
-        svr = SVR(kernel='linear', C=1)
-        masker = NiftiMasker(mask_img=gm_mask,standardize=True, 
-                             memory='nilearn_cache', memory_level=1)
-
-        feature_selection = SelectPercentile(f_regression, percentile=5)
-        fs_svr = Pipeline([('feat_select', feature_selection), ('svr', svr)])
-
-        # Run the regression
-        X = masker.fit_transform(bold_feature_data)
-        X = X[mask]
-        maskedlabels=labels[mask]
-        fs_svr.fit(X, maskedlabels)
-
-        from sklearn.model_selection import cross_val_predict, LeaveOneGroupOut
-
-        loso = LeaveOneGroupOut()
-        y_pred = cross_val_predict(fs_svr, X, y=maskedlabels, n_jobs=6,
-                                   groups=conditions['subject'][mask],cv=loso)
-        # save weights
-        coef = svr.coef_
-        coef = feature_selection.inverse_transform(coef)
-        coef_image = masker.inverse_transform(coef)
-        coef_image.to_filename(output_dir + '/svrweights_' + analysis + '.nii.gz')
-
-        ages_df = conditions[mask]
-        ages_df['pred_age'] = Series(y_pred, index=ages_df.index)
-        ages_df.head()
-
-        actual_age = ages_df.groupby(['subject'])['age'].mean()
-        actual_age = actual_age.tolist()
-        pred_age = ages_df.groupby(['subject'])['pred_age'].mean()
-        pred_age = pred_age.tolist()
-
-        from scipy.stats import linregress
-        slope, intercept, r_val, p_val, stderr = linregress(actual_age, pred_age) 
-
-        from sklearn.metrics import mean_squared_error
-        mse = mean_squared_error(actual_age, pred_age)
-
-        from scipy.stats import spearmanr
-        spear_r, spear_p = spearmanr(actual_age, pred_age)
-
-        print("prediction accuracy: %.4f / p-value: %f / MSE: %f // Spearman: %f / p-value: %f" % (r_val, p_val, mse, spear_r, spear_p))
-
-        # plot the predicted versus actual values
-        import matplotlib.pyplot as plt
-        plt.scatter(actual_age, pred_age, color='b')
-        plt.xlabel('Actual')
-        plt.ylabel('Predicted')
-        plt.savefig(output_dir + '/scatter_pred_actual_mean_' + analysis + '_final.svg', transparent=True)
-        plt.show()
-        plt.close()
-
-        results_file.write("MEAN prediction accuracy r-value: %.4f / p-value: %f / MSE: %f // Spearman: %f / p-value: %f \n" % (r_val, p_val, mse, spear_r, spear_p))
-        results_file.write('predicted: ' + str(pred_age) + '\n')
-        results_file.write('actual: ' + str(actual_age) + '\n')
-
-
-        actual_age = ages_df.groupby(['subject'])['age'].median()
-        actual_age = actual_age.tolist()
-        pred_age = ages_df.groupby(['subject'])['pred_age'].median()
-        pred_age = pred_age.tolist()
-
-        from scipy.stats import linregress
-        slope, intercept, r_val, p_val, stderr = linregress(actual_age, pred_age) 
-
-        from sklearn.metrics import mean_squared_error
-        mse = mean_squared_error(actual_age, pred_age)
-
-        from scipy.stats import spearmanr
-        spear_r, spear_p = spearmanr(actual_age, pred_age)
-
-        print("prediction accuracy: %.4f / p-value: %f / MSE: %f // Spearman: %f / p-value: %f" % (r_val, p_val, mse, spear_r, spear_p))
-
-        # plot the predicted versus actual values
-        import matplotlib.pyplot as plt
-        plt.scatter(actual_age, pred_age, color='b')
-        plt.xlabel('Actual')
-        plt.ylabel('Predicted')
-        plt.savefig(output_dir + '/scatter_pred_actual_median_' + analysis + '_final.svg', transparent=True)
-        plt.close()
-
-        results_file.write("MEDIAN prediction accuracy r-value: %.4f / p-value: %f / MSE: %f // Spearman: %f / p-value: %f \n" % (r_val, p_val, mse, spear_r, spear_p))
-        results_file.write('predicted: ' + str(pred_age) + '\n')
-        results_file.write('actual: ' + str(actual_age) + '\n')
-
-        results_file.close()
 
 
     # ## Perform binary support vector classification
@@ -246,7 +126,7 @@ for analysis in ['all_conditions','allConds_predAge','negative','positive','neut
                              memory='nilearn_cache', memory_level=1)
 
         # Select the features contributing to the model
-        feature_selection = SelectPercentile(f_classif, percentile=5) #0.05/228453 voxels
+        feature_selection = SelectPercentile(f_classif, percentile=5) 
         fs_svc = Pipeline([('feat_select', feature_selection), ('svc', svc)])
 
         # Run the classifier
@@ -282,7 +162,7 @@ for analysis in ['all_conditions','allConds_predAge','negative','positive','neut
             sensitivity = recall_score(maskedlabels,y_pred,labels=[label],average='weighted')
             precision = precision_score(maskedlabels,y_pred,labels=[label],average='weighted')
 
-            results_file.write("%s: classification accuracy: %.4f / chance level: %f / sensitivity: %f / precision: %f \n" % 
+            results_file.write("%s: classification accuracy: %.4f \n chance level: %f \n sensitivity: %f \n precision: %f \n" % 
             (label, classification_accuracy, chance, sensitivity, precision))
 
         # compute and display a confusion matrix
@@ -301,21 +181,22 @@ for analysis in ['all_conditions','allConds_predAge','negative','positive','neut
             plt.title('Confusion matrix')
             plt.colorbar()
             tick_marks = arange(len(classes))
-            plt.xticks(tick_marks, classes, rotation=45)
-            plt.yticks(tick_marks, classes)
+            plt.xticks(tick_marks, classes, rotation=45, size=16)
+            plt.yticks(tick_marks, classes, size=16)
 
             thresh = cm.max() / 2.
             for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
                 plt.text(j, i, format(cm[i, j],  'd'),
                          horizontalalignment='center',
-                         color='white' if cm[i, j] > thresh else 'black')
+                         color='white' if cm[i, j] > thresh else 'black', size=16)
 
             plt.tight_layout()
-            plt.ylabel('True label')
-            plt.xlabel('Predicted label')
+            plt.ylabel('True label', size=16)
+            plt.xlabel('Predicted label', size=16)
 
         plot_confusion_matrix(cnf_matrix, classes)
         plt.savefig(output_dir + '/confusion_matrix_' + analysis + '.svg', transparent=True)
+        plt.close()
 
         results_file.close()
 
@@ -335,7 +216,7 @@ for analysis in ['all_conditions','allConds_predAge','negative','positive','neut
         # Perform permutation testing to get a p-value
         score, permutation_scores, pvalue = permutation_test_score(fs_svc, X, maskedlabels, scoring='accuracy', 
                                                                    cv=loso, n_permutations=500, n_jobs=10, 
-                                                                   groups=conditions['subject'][mask])
+                                                                   groups=conditions['subject'][mask], permute_groups=True)
         savetxt(output_dir + '/permutation_scores_' + analysis + '.txt', permutation_scores)
 
         print("Classification score %s (pvalue : %s)" % (score, pvalue))
@@ -355,48 +236,3 @@ for analysis in ['all_conditions','allConds_predAge','negative','positive','neut
         # save final pval/classifier score
         results_file.write("Classification score %s (pvalue : %s)" % (score, pvalue))
         results_file.close()
-
-    elif type_svm == 'nonbinary':
-        ## Perform permutation testing to get a p-value for MSE
-        score, permutation_scores, pvalue = permutation_test_score(fs_svr, X, maskedlabels, scoring='neg_mean_squared_error', 
-                                                                   cv=loso, n_permutations=500, n_jobs=10, 
-                                                                   groups=conditions['subject'][mask])
-        savetxt(output_dir + '/permutation_scores_mse_' + analysis + '.txt', permutation_scores)
-
-        # Save a figure of the permutation scores
-        plt.hist(permutation_scores, 20, label='Permutation scores',
-                 edgecolor='black')
-        ylim = plt.ylim()
-        plt.plot(2 * [score], ylim, '--g', linewidth=3,
-                 label='Mean Squared Error (pvalue %f)' % pvalue)
-        plt.ylim(ylim)
-        plt.legend()
-        plt.xlabel('Score')
-        plt.savefig(output_dir + '/permutation_plot_mse_' + analysis + '.svg', transparent=True)
-        plt.close()
-
-        # save final pval/classifier score
-        results_file.write('MSE score %s (pvalue : %s) \n' % (score, pvalue))
-
-        ## Perform permutation testing to get a p-value for r-squared
-        score, permutation_scores, pvalue = permutation_test_score(fs_svr, X, maskedlabels, scoring='r2', 
-                                                                   cv=loso, n_permutations=500, n_jobs=10, 
-                                                                   groups=conditions['subject'][mask])
-        savetxt(output_dir + '/permutation_scores_r2_' + analysis + '.txt', permutation_scores)
-
-        # Save a figure of the permutation scores
-        plt.hist(permutation_scores, 20, label='Permutation scores',
-                 edgecolor='black')
-        ylim = plt.ylim()
-        plt.plot(2 * [score], ylim, '--g', linewidth=3,
-                 label='R-squared (pvalue %f)' % pvalue)
-        plt.ylim(ylim)
-        plt.legend()
-        plt.xlabel('Score')
-        plt.savefig(output_dir + '/permutation_plot_r2_' + analysis + '.svg', transparent=True)
-        plt.close()
-
-        # save final pval/classifier score
-        results_file.write('R square: %s (pvalue : %s) \n' % (score, pvalue))
-        results_file.close()    
-
